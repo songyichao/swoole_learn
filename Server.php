@@ -14,9 +14,23 @@ class Server
     {
         $this->serv = new swoole_server('0.0.0.0', 9501);
         $this->serv->set([
-            'worker_num' => 8,
+            'worker_num' => 1,
             'daemonize' => false,
+            'backlog' => 128,
+            'max_request' => 4,
+            'log_file' => 'log/swoole.log',
         ]);
+        $server = $this->serv;
+        $process = new swoole_process(function ($process) use ($server) {
+            while (true) {
+                $msg = $process->read();
+                foreach ($server->connections as $conn) {
+                    $server->send($conn, $msg);
+                }
+            }
+        });
+
+        $this->serv->addProcess($process);
 
         $this->serv->on('Start', [$this, 'onStart']);
         $this->serv->on('Connect', [$this, 'onConnect']);
@@ -42,10 +56,10 @@ class Server
         $serv->send($fd, $data);
     }
 
-    public function onClose($serv, $fd, $from_id)
+    public function onClose(swoole_server $serv, $fd, $from_id)
     {
         echo 'Client {' . $fd . '} close connection' . PHP_EOL;
-
+        $serv->shutdown();
     }
 }
 
